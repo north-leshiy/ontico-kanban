@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { fetchGetInfo, fetchAllTechLeadLectures, setDecision, ApiError } from './api/client'
-import type { Decision, GetInfoResult, Lecture } from './types/api'
+import type { CuratorEntry, Decision, GetInfoResult, Lecture } from './types/api'
 import { KanbanColumn } from './components/KanbanColumn'
 import { LectureCard } from './components/LectureCard'
+import { CuratorFilter } from './components/CuratorFilter'
 import { LoadingScreen } from './components/LoadingScreen'
 import { ErrorScreen } from './components/ErrorScreen'
 
@@ -17,6 +18,7 @@ export function KanbanBoard() {
   const [lectures, setLectures] = useState<Lecture[]>([])
   const [toastError, setToastError] = useState<string | null>(null)
   const [activeLectureId, setActiveLectureId] = useState<number | null>(null)
+  const [selectedCuratorIds, setSelectedCuratorIds] = useState<Set<number>>(new Set())
 
   const load = useCallback(async () => {
     setLoadState('loading')
@@ -93,10 +95,33 @@ export function KanbanBoard() {
     ? lectures.find((l) => l.id === activeLectureId) ?? null
     : null
 
+  // Curators that appear on at least one lecture (deduplicated by id)
+  const filterCurators: CuratorEntry[] = Array.from(
+    new Map(
+      lectures.flatMap((l) => l.curator.value).map((c) => [c.id, c])
+    ).values()
+  )
+
+  function handleToggleCurator(id: number) {
+    setSelectedCuratorIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function handleClearAll() {
+    setSelectedCuratorIds(new Set())
+  }
+
+  const filteredLectures = selectedCuratorIds.size === 0
+    ? lectures
+    : lectures.filter((l) => l.curator.value.some((c) => selectedCuratorIds.has(c.id)))
+
   const lecturesByDecision = new Map<string, Lecture[]>(
     meta.decisions.map((d: Decision) => [
       d.variant,
-      lectures.filter((l) => l.decision.variant === d.variant),
+      filteredLectures.filter((l) => l.decision.variant === d.variant),
     ])
   )
 
@@ -104,10 +129,20 @@ export function KanbanBoard() {
     <div className="flex flex-col h-screen bg-white overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200 flex items-center gap-3">
-        <h1 className="text-base font-semibold text-gray-800">
+        <h1 className="text-base font-semibold text-gray-800 flex-shrink-0">
           Ontico Kanban — TechLead
         </h1>
-        <span className="text-sm text-gray-400">{lectures.length} заявок</span>
+        <span className="text-sm text-gray-400 flex-shrink-0">
+          {selectedCuratorIds.size > 0
+            ? `${filteredLectures.length} / ${lectures.length} заявок`
+            : `${lectures.length} заявок`}
+        </span>
+        <CuratorFilter
+          curators={filterCurators}
+          selectedIds={selectedCuratorIds}
+          onToggle={handleToggleCurator}
+          onClearAll={handleClearAll}
+        />
       </header>
 
       {/* Board */}
