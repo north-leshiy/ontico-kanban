@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Package archive
+ontico-kanban.zip
+
+# Claude Code
+.claude/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data / specs
+data/
+openspec/
+
+# Logs
+*.log
+npm-debug.log*
