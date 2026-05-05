@@ -98,7 +98,7 @@ export function KanbanBoard() {
   // Curators that appear on at least one lecture (deduplicated by id)
   const filterCurators: CuratorEntry[] = Array.from(
     new Map(
-      lectures.flatMap((l) => l.curator.value).map((c) => [c.id, c])
+      lectures.flatMap((l) => l.curator.value ?? []).map((c) => [c.id, c])
     ).values()
   )
 
@@ -116,7 +116,7 @@ export function KanbanBoard() {
 
   const filteredLectures = selectedCuratorIds.size === 0
     ? lectures
-    : lectures.filter((l) => l.curator.value.some((c) => selectedCuratorIds.has(c.id)))
+    : lectures.filter((l) => (l.curator.value ?? []).some((c) => selectedCuratorIds.has(c.id)))
 
   const lecturesByDecision = new Map<string, Lecture[]>(
     meta.decisions.map((d: Decision) => [

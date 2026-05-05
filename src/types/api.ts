@@ -111,7 +111,7 @@ export interface CuratorEntry {
 export interface CuratorField {
   variant: string
   mode: 'edit' | 'show' | 'hide'
-  value: CuratorEntry[]
+  value: CuratorEntry[] | null
 }
 
 export interface TitleField {

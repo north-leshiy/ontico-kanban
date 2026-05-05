@@ -56,7 +56,7 @@ export function LectureCard({ lecture }: LectureCardProps) {
   const mainSpeaker =
     lecture.speakers.speakers.find((s) => s.is_main) ?? lecture.speakers.speakers[0]
 
-  const curators = lecture.curator.value
+  const curators = lecture.curator.value ?? []
 
   function handleClick() {
     if (didDragRef.current) {
