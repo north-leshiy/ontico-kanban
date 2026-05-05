@@ -1,7 +1,6 @@
 import type { GetInfoResult, GetInfoResponse, Lecture, LecturesResponse } from '../types/api'
 
 const BASE_URL = 'https://conf.ontico.ru'
-const TECHLEAD_SECTION_ID = 10634778
 const PER_PAGE = 100
 
 // ── Error types ───────────────────────────────────────────────────────────────
@@ -48,7 +47,7 @@ export async function fetchGetInfo(): Promise<GetInfoResult> {
 
 // ── moderate2: paginated lecture list ─────────────────────────────────────────
 
-async function fetchLecturesPage(page: number): Promise<Lecture[]> {
+async function fetchLecturesPage(page: number, sectionIds: number[]): Promise<Lecture[]> {
   const data = await apiFetch<LecturesResponse>(
     `/api/lectures/moderate2.json?page=${page}&per_page=${PER_PAGE}&archive=0`,
     'POST',
@@ -57,7 +56,7 @@ async function fetchLecturesPage(page: number): Promise<Lecture[]> {
         statuses: [],
         conferences: [],
         dates: [],
-        sections: [TECHLEAD_SECTION_ID],
+        sections: sectionIds,
         decisions: [],
         curators: [],
         stages: [],
@@ -82,12 +81,12 @@ async function fetchLecturesPage(page: number): Promise<Lecture[]> {
   return data.result.lectures
 }
 
-export async function fetchAllTechLeadLectures(): Promise<Lecture[]> {
+export async function fetchAllLectures(sectionIds: number[]): Promise<Lecture[]> {
   const all: Lecture[] = []
   let page = 1
 
   while (true) {
-    const lectures = await fetchLecturesPage(page)
+    const lectures = await fetchLecturesPage(page, sectionIds)
     all.push(...lectures)
     if (lectures.length < PER_PAGE) break
     page++

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
-import { fetchGetInfo, fetchAllTechLeadLectures, setDecision, ApiError } from './api/client'
+import { fetchGetInfo, fetchAllLectures, setDecision, ApiError } from './api/client'
+
+const TECHLEAD_SECTION_ID = 10634778
 import type { CuratorEntry, Decision, GetInfoResult, Lecture } from './types/api'
 import { KanbanColumn } from './components/KanbanColumn'
 import { LectureCard } from './components/LectureCard'
@@ -19,14 +21,15 @@ export function KanbanBoard() {
   const [toastError, setToastError] = useState<string | null>(null)
   const [activeLectureId, setActiveLectureId] = useState<number | null>(null)
   const [selectedCuratorIds, setSelectedCuratorIds] = useState<Set<number>>(new Set())
+  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(TECHLEAD_SECTION_ID)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (sectionIds: number[]) => {
     setLoadState('loading')
     setError('')
     try {
       const info = await fetchGetInfo()
       setMeta(info)
-      const all = await fetchAllTechLeadLectures()
+      const all = await fetchAllLectures(sectionIds)
       setLectures(all)
       setLoadState('ready')
     } catch (err) {
@@ -40,7 +43,7 @@ export function KanbanBoard() {
   }, [])
 
   useEffect(() => {
-    void load()
+    void load([TECHLEAD_SECTION_ID])
   }, [load])
 
   const sensors = useSensors(
@@ -87,8 +90,14 @@ export function KanbanBoard() {
     }
   }
 
+  function handleSectionChange(sectionId: number | null) {
+    setSelectedSectionId(sectionId)
+    setSelectedCuratorIds(new Set())
+    void load(sectionId ? [sectionId] : [])
+  }
+
   if (loadState === 'loading' || loadState === 'idle') return <LoadingScreen />
-  if (loadState === 'error') return <ErrorScreen error={error} onRetry={() => void load()} />
+  if (loadState === 'error') return <ErrorScreen error={error} onRetry={() => void load(selectedSectionId ? [selectedSectionId] : [])} />
   if (!meta) return null
 
   const activeLecture = activeLectureId !== null
@@ -130,8 +139,18 @@ export function KanbanBoard() {
       {/* Header */}
       <header className="flex-shrink-0 px-4 py-3 border-b border-gray-200 flex items-center gap-3">
         <h1 className="text-base font-semibold text-gray-800 flex-shrink-0">
-          Ontico Kanban — TechLead
+          Ontico Kanban
         </h1>
+        <select
+          value={selectedSectionId ?? ''}
+          onChange={(e) => handleSectionChange(e.target.value ? Number(e.target.value) : null)}
+          className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 bg-white flex-shrink-0"
+        >
+          <option value="">Все секции</option>
+          {meta.conference_sections.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
         <span className="text-sm text-gray-400 flex-shrink-0">
           {selectedCuratorIds.size > 0
             ? `${filteredLectures.length} / ${lectures.length} заявок`
