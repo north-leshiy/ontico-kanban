@@ -1,3 +1,8 @@
+## Purpose
+Инфраструктура Chrome-расширения: Manifest V3, background service worker как API-прокси, сборка через Vite.
+
+## Requirements
+
 ### Requirement: Manifest V3 структура расширения
 Расширение SHALL использовать Chrome Extension Manifest V3 с минимально необходимыми разрешениями: `host_permissions: ["*://conf.ontico.ru/*"]` для доступа к API с куками пользователя. Манифест SHALL объявлять background service worker и action.
 

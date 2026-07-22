@@ -2,16 +2,28 @@ import { useState, useEffect, useCallback } from 'react'
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { fetchGetInfo, fetchAllLectures, setDecision, ApiError } from './api/client'
-
-const TECHLEAD_SECTION_ID = 10634778
+import type { LectureFilters } from './api/client'
 import type { CuratorEntry, Decision, GetInfoResult, Lecture } from './types/api'
+import type { BoardPreferences } from './storage/preferences'
+import { loadPreferences, savePreferences } from './storage/preferences'
+import { resolveSelection } from './selection/resolveSelection'
 import { KanbanColumn } from './components/KanbanColumn'
 import { LectureCard } from './components/LectureCard'
 import { CuratorFilter } from './components/CuratorFilter'
+import { ConferenceFilter } from './components/ConferenceFilter'
 import { LoadingScreen } from './components/LoadingScreen'
 import { ErrorScreen } from './components/ErrorScreen'
 
 type LoadState = 'idle' | 'loading' | 'error' | 'ready'
+
+const EMPTY_SELECTION: BoardPreferences = { conferenceId: null, sectionId: null }
+
+function toFilters(selection: BoardPreferences): LectureFilters {
+  return {
+    conferenceIds: selection.conferenceId !== null ? [selection.conferenceId] : [],
+    sectionIds: selection.sectionId !== null ? [selection.sectionId] : [],
+  }
+}
 
 export function KanbanBoard() {
   const [loadState, setLoadState] = useState<LoadState>('idle')
@@ -21,30 +33,49 @@ export function KanbanBoard() {
   const [toastError, setToastError] = useState<string | null>(null)
   const [activeLectureId, setActiveLectureId] = useState<number | null>(null)
   const [selectedCuratorIds, setSelectedCuratorIds] = useState<Set<number>>(new Set())
-  const [selectedSectionId, setSelectedSectionId] = useState<number | null>(TECHLEAD_SECTION_ID)
+  // Конференция и секция живут одним объектом: смена конференции меняет обе сразу,
+  // и он же уходит в хранилище без пересборки.
+  const [selection, setSelection] = useState<BoardPreferences>(EMPTY_SELECTION)
 
-  const load = useCallback(async (sectionIds: number[]) => {
+  function reportError(err: unknown) {
+    const msg =
+      err instanceof ApiError
+        ? err.message
+        : 'Произошла ошибка при загрузке данных'
+    setError(msg)
+    setLoadState('error')
+  }
+
+  // Набор фильтров известен только после метаданных — отсюда два шага под одним loading.
+  const init = useCallback(async () => {
     setLoadState('loading')
     setError('')
     try {
       const info = await fetchGetInfo()
       setMeta(info)
-      const all = await fetchAllLectures(sectionIds)
-      setLectures(all)
+      const restored = resolveSelection(info, await loadPreferences())
+      setSelection(restored)
+      setLectures(await fetchAllLectures(toFilters(restored)))
       setLoadState('ready')
     } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? err.message
-          : 'Произошла ошибка при загрузке данных'
-      setError(msg)
-      setLoadState('error')
+      reportError(err)
+    }
+  }, [])
+
+  const reload = useCallback(async (next: BoardPreferences) => {
+    setLoadState('loading')
+    setError('')
+    try {
+      setLectures(await fetchAllLectures(toFilters(next)))
+      setLoadState('ready')
+    } catch (err) {
+      reportError(err)
     }
   }, [])
 
   useEffect(() => {
-    void load([TECHLEAD_SECTION_ID])
-  }, [load])
+    void init()
+  }, [init])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -90,14 +121,32 @@ export function KanbanBoard() {
     }
   }
 
-  function handleSectionChange(sectionId: number | null) {
-    setSelectedSectionId(sectionId)
+  function applySelection(next: BoardPreferences) {
+    setSelection(next)
     setSelectedCuratorIds(new Set())
-    void load(sectionId ? [sectionId] : [])
+    void savePreferences(next)
+    void reload(next)
+  }
+
+  // Секции чужой конференции в выборе не оставляем
+  function handleConferenceChange(conferenceId: number | null) {
+    applySelection({ conferenceId, sectionId: null })
+  }
+
+  function handleSectionChange(sectionId: number | null) {
+    applySelection({ ...selection, sectionId })
   }
 
   if (loadState === 'loading' || loadState === 'idle') return <LoadingScreen />
-  if (loadState === 'error') return <ErrorScreen error={error} onRetry={() => void load(selectedSectionId ? [selectedSectionId] : [])} />
+  // Метаданные не загрузились — повтор начинает с самого начала, иначе фильтр не восстановить
+  if (loadState === 'error') {
+    return (
+      <ErrorScreen
+        error={error}
+        onRetry={() => void (meta ? reload(selection) : init())}
+      />
+    )
+  }
   if (!meta) return null
 
   const activeLecture = activeLectureId !== null
@@ -141,16 +190,14 @@ export function KanbanBoard() {
         <h1 className="text-base font-semibold text-gray-800 flex-shrink-0">
           Ontico Kanban
         </h1>
-        <select
-          value={selectedSectionId ?? ''}
-          onChange={(e) => handleSectionChange(e.target.value ? Number(e.target.value) : null)}
-          className="text-sm border border-gray-200 rounded px-2 py-1 text-gray-700 bg-white flex-shrink-0"
-        >
-          <option value="">Все секции</option>
-          {meta.conference_sections.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
+        <ConferenceFilter
+          conferences={meta.conferences}
+          sections={meta.conference_sections}
+          selectedConferenceId={selection.conferenceId}
+          selectedSectionId={selection.sectionId}
+          onConferenceChange={handleConferenceChange}
+          onSectionChange={handleSectionChange}
+        />
         <span className="text-sm text-gray-400 flex-shrink-0">
           {selectedCuratorIds.size > 0
             ? `${filteredLectures.length} / ${lectures.length} заявок`

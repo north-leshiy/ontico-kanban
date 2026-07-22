@@ -1,16 +1,39 @@
+## Purpose
+Клиент для работы с API conf.ontico.ru: загрузка метаданных и заявок по выбранной конференции и секции, смена decision через background service worker расширения.
+## Requirements
 ### Requirement: Загрузка метаданных (get_info)
-API клиент SHALL загружать метаданные через `GET /api/lectures/get_info.json?archive=0`, возвращающий список decisions, statuses, sections, curators и conferences. Результат SHALL кешироваться на время сессии.
+API клиент SHALL загружать метаданные через `GET /api/lectures/get_info.json?archive=0`, возвращающий список decisions, statuses, sections, curators и conferences. Результат SHALL кешироваться на время сессии. Метаданные SHALL загружаться до заявок, поскольку набор фильтров определяется по списку доступных конференций и секций.
 
 #### Scenario: Успешная загрузка метаданных
 - **WHEN** канбан-доска инициализируется
-- **THEN** загружаются и доступны в памяти: массив decisions (id, variant, name), массив curators (id, name, avatar), массив conference_sections (id, name, conference_id)
+- **THEN** загружаются и доступны в памяти: массив decisions (id, variant, name), массив curators (id, name, avatar), массив conference_sections (id, name, conference_id), массив conferences (id, name, webname)
+
+#### Scenario: Метаданные предшествуют заявкам
+- **WHEN** доска инициализируется
+- **THEN** запрос заявок отправляется только после получения метаданных и вычисления фильтра
 
 #### Scenario: Ошибка сети при загрузке метаданных
 - **WHEN** запрос к get_info.json завершается с ошибкой сети
 - **THEN** отображается сообщение об ошибке с кнопкой "Повторить"
 
-### Requirement: Загрузка всех заявок секции TechLead
-API клиент SHALL загружать заявки через `POST /api/lectures/moderate2.json` с фильтром `sections: [10634778]` (TechLead), итерируя постранично (per_page=100) пока не будут получены все записи. Все страницы SHALL загружаться при инициализации.
+### Requirement: Загрузка всех заявок по фильтру конференции и секции
+API клиент SHALL загружать заявки через `POST /api/lectures/moderate2.json`, принимая наборы идентификаторов конференций и секций и подставляя их в `filters.conferences` и `filters.sections`. Пустой набор SHALL означать отсутствие фильтра по соответствующему измерению. Клиент SHALL итерировать постранично (per_page=100) пока не будут получены все записи.
+
+#### Scenario: Фильтр по конференции без указания секции
+- **WHEN** запрашиваются заявки с конференцией `10560392` и пустым набором секций
+- **THEN** тело запроса содержит `filters.conferences: [10560392]` и `filters.sections: []`
+
+#### Scenario: Фильтр по конференции и секции
+- **WHEN** запрашиваются заявки с конференцией `10560392` и секцией `10642193`
+- **THEN** тело запроса содержит `filters.conferences: [10560392]` и `filters.sections: [10642193]`
+
+#### Scenario: Фильтр только по секции
+- **WHEN** запрашиваются заявки с пустым набором конференций и секцией `10642193`
+- **THEN** тело запроса содержит `filters.conferences: []` и `filters.sections: [10642193]`
+
+#### Scenario: Загрузка без фильтров
+- **WHEN** оба набора пусты
+- **THEN** тело запроса содержит пустые `filters.conferences` и `filters.sections`, возвращаются заявки всех доступных конференций
 
 #### Scenario: Загрузка одной страницы
 - **WHEN** выполняется запрос страницы 1 с per_page=100
@@ -45,3 +68,4 @@ API клиент SHALL отправлять `POST /api/lectures/moderate2.json` 
 #### Scenario: Типизация ответа moderate2
 - **WHEN** разработчик использует данные заявки из API
 - **THEN** TypeScript обеспечивает автодополнение и проверку типов для полей: id, title.value, decision.variant, decision.value, speakers.speakers, curator.value, section.value, section.name
+

@@ -47,16 +47,21 @@ export async function fetchGetInfo(): Promise<GetInfoResult> {
 
 // ── moderate2: paginated lecture list ─────────────────────────────────────────
 
-async function fetchLecturesPage(page: number, sectionIds: number[]): Promise<Lecture[]> {
+export interface LectureFilters {
+  conferenceIds: number[]
+  sectionIds: number[]
+}
+
+async function fetchLecturesPage(page: number, filters: LectureFilters): Promise<Lecture[]> {
   const data = await apiFetch<LecturesResponse>(
     `/api/lectures/moderate2.json?page=${page}&per_page=${PER_PAGE}&archive=0`,
     'POST',
     {
       filters: {
         statuses: [],
-        conferences: [],
+        conferences: filters.conferenceIds,
         dates: [],
-        sections: sectionIds,
+        sections: filters.sectionIds,
         decisions: [],
         curators: [],
         stages: [],
@@ -81,12 +86,12 @@ async function fetchLecturesPage(page: number, sectionIds: number[]): Promise<Le
   return data.result.lectures
 }
 
-export async function fetchAllLectures(sectionIds: number[]): Promise<Lecture[]> {
+export async function fetchAllLectures(filters: LectureFilters): Promise<Lecture[]> {
   const all: Lecture[] = []
   let page = 1
 
   while (true) {
-    const lectures = await fetchLecturesPage(page, sectionIds)
+    const lectures = await fetchLecturesPage(page, filters)
     all.push(...lectures)
     if (lectures.length < PER_PAGE) break
     page++
